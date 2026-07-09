@@ -135,12 +135,60 @@ conflicts, and manage recurring care.
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+PawPal+ has two front ends that share the same backend in [`pawpal_system.py`](pawpal_system.py):
+a Streamlit app ([`app.py`](app.py)) for interactive use, and a small script
+([`main.py`](main.py)) that prints a sample schedule to the terminal.
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+### Main UI features (Streamlit)
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+Launch the app with `streamlit run app.py`. From top to bottom, the UI lets a user:
+
+- **Set the owner** — enter an owner name; the `Owner` and `Scheduler` are created once and
+  persist across reruns.
+- **Add a pet** — enter a name and species and click **Add pet**. Duplicate names are rejected,
+  and the current pets are listed back.
+- **Add a task** — pick one of the owner's pets, then enter a description, a time (`HH:MM`), and a
+  frequency (daily / weekly / monthly).
+- **Build schedule** — click **Generate schedule** to see every pending task across all pets in a
+  single table, ordered by time of day.
+- **Today's Tasks** — see a live, time-sorted list of pending tasks, each with a **Done** button.
+  Completing a recurring task auto-schedules its next occurrence and confirms the new due date.
+- **Conflict warnings** — if two pending tasks share a start time, a ⚠️ warning lists the clashing
+  slots and the tasks involved.
+- **Filter tasks** — browse tasks by pet and/or completion status (All / Pending / Done).
+
+### Example workflow
+
+1. Enter the owner name (e.g. "Jordan").
+2. **Add a pet** — "Rex", species dog. Add a second pet — "Milo", a cat.
+3. **Add tasks** — a daily "Morning walk" at `08:00` for Rex and a daily "Feed breakfast" at
+   `07:30` for Milo.
+4. Click **Generate schedule** — the table shows Milo's 07:30 feeding before Rex's 08:00 walk.
+5. In **Today's Tasks**, click **Done** on the morning walk — PawPal+ marks it complete and
+   queues tomorrow's walk automatically.
+6. Add a second Rex task at `07:30` and PawPal+ raises a conflict warning against Milo's feeding.
+7. Use **Filter Tasks** to view only Rex's pending tasks.
+
+### Key Scheduler behaviors shown
+
+- **Sorting** — `build_schedule()` / `sort_by_time()` order tasks chronologically, so an earlier
+  feeding appears before a later walk regardless of which pet or order they were added in.
+- **Conflict warnings** — `find_conflicts(pending_only=True)` surfaces tasks that share an exact
+  start time, both across pets and within one pet.
+- **Recurring tasks** — completing a daily/weekly task calls `complete_task()`, which appends the
+  next occurrence via `Task.next_occurrence()`.
+- **Filtering** — `filter_tasks()` narrows the view by pet name and/or completion status.
+
+### Sample CLI output
+
+Running the demo script prints today's schedule, sorted by time across both pets:
+
+```
+$ python main.py
+Today's Schedule
+========================================
+07:30  Milo (cat): Feed breakfast
+08:00  Rex (dog): Morning walk
+18:00  Rex (dog): Evening walk
+19:00  Milo (cat): Clean litter box
+```

@@ -38,15 +38,55 @@ This tradeoff is reasonable for this scenario for two reasons. First, it matches
 
 ## 3. AI Collaboration
 
-**a. How you used AI**
+**a. Which AI features were most effective for building the scheduler**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+A few features of my AI coding assistant did the most work:
 
-**b. Judgment and verification**
+- **Codebase-aware edits.** Because the assistant could read the whole repo, it kept `app.py`,
+  `main.py`, `pawpal_system.py`, and the tests consistent when a method signature changed. When I
+  renamed or reshaped a `Scheduler` method, it updated every call site instead of leaving me to
+  hunt for them.
+- **Grounding answers in the actual code.** The most effective prompts were specific and
+  code-anchored — e.g. "name the exact method that implements conflict detection and describe its
+  behavior" — rather than open-ended "how should I build a scheduler." Pointing it at real methods
+  like `find_conflicts()` and `build_schedule()` kept its output accurate instead of inventing an
+  API.
+- **Test scaffolding.** It was fast at turning a described behavior ("a daily task's next
+  occurrence is due one day later") into a concrete pytest case, which let me focus on deciding
+  *what* to test rather than boilerplate.
+- **Explaining tradeoffs on request.** Asking it to lay out the pros and cons of a design choice
+  (before writing code) was more useful than asking it to just pick one.
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+**b. An AI suggestion I rejected or modified to keep the design clean**
+
+My original UML modeled a `Task` with `duration_minutes` and a `priority` weight, and a
+`Scheduler` with a `day_minutes` budget — and the assistant was happy to build a "fit as many
+high-priority tasks as possible into the available minutes" scheduler around that. I rejected that
+direction. For a pet-care assistant, an owner thinks in terms of *when* things happen ("walk at
+08:00, feed at 07:30"), not in terms of packing minutes into a daily budget, and the
+duration/priority model added state I couldn't test cleanly or explain simply. I redesigned `Task`
+around `time` and `frequency` instead, dropped `day_minutes` entirely, and made the scheduler sort
+by time of day with exact-time conflict detection. The result is a model that matches how the app
+is actually used and is far easier to verify. I evaluated the change by writing the tests first:
+the time-based model produced small, deterministic assertions (e.g. sorted `["07:30", "12:00",
+"18:00"]`), whereas the minute-packing version would have needed fuzzy "did it pick a reasonable
+set" checks.
+
+I also verified AI output the same way throughout: I ran `python -m pytest` and `python main.py`
+after each change rather than trusting that generated code was correct, and I read every diff
+before accepting it.
+
+**c. How separate chat sessions per phase kept me organized**
+
+I used a different session for each phase — design/UML, implementing `pawpal_system.py`, writing
+tests, and wiring up the Streamlit UI. This helped in two concrete ways. First, each session
+stayed focused: the implementation session had the class design fresh in context and didn't drag
+in unrelated UI concerns, so its suggestions were more on-target. Second, it gave me a natural
+checkpoint between phases — I had to restate the current design when starting the next session,
+which forced me to confirm the code actually matched my mental model (this is exactly how I caught
+that the UML still described the old `duration_minutes` design after I'd moved to a time-based
+one). Keeping sessions scoped also made it easy to go back and find the reasoning behind a specific
+decision instead of scrolling through one giant thread.
 
 ---
 

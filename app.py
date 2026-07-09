@@ -4,6 +4,21 @@ from pawpal_system import Task, Pet, Owner, Scheduler
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
+
+def tasks_to_rows(pairs: list[tuple[Pet, Task]]) -> list[dict]:
+    """Turn (pet, task) pairs into ordered rows for st.table display."""
+    return [
+        {
+            "Time": task.time,
+            "Pet": pet.name,
+            "Species": pet.species,
+            "Task": task.description,
+            "Frequency": task.frequency,
+            "Status": "✓ Done" if task.completed else "○ Pending",
+        }
+        for pet, task in pairs
+    ]
+
 st.title("🐾 PawPal+")
 
 st.markdown(
@@ -102,7 +117,8 @@ if st.button("Generate schedule"):
     if not schedule:
         st.info("No pending tasks to schedule.")
     else:
-        st.text(scheduler.explain())
+        st.success(f"Planned {len(schedule)} task(s), ordered by time of day.")
+        st.table(tasks_to_rows(schedule))
 
 st.divider()
 
@@ -167,6 +183,5 @@ else:
     else:
         # Order the matches chronologically before displaying them.
         results.sort(key=lambda pair: pair[1].time)
-        st.write(f"{len(results)} task(s):")
-        for pet, task in results:
-            st.markdown(f"- {task.time}  **{pet.name}**: {task}")
+        st.success(f"Showing {len(results)} matching task(s).")
+        st.table(tasks_to_rows(results))
