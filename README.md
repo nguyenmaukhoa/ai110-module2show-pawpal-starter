@@ -47,11 +47,12 @@ pip install -r requirements.txt
 Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
 
 ```
-# e.g.:
-# Daily plan for Biscuit (Golden Retriever):
-#   08:00 — Morning walk (30 min) [priority: high]
-#   09:00 — Feeding (10 min) [priority: high]
-#   ...
+Today's Schedule
+========================================
+07:30  Milo (cat): Feed breakfast
+08:00  Rex (dog): Morning walk
+18:00  Rex (dog): Evening walk
+19:00  Milo (cat): Clean litter box
 ```
 
 ## 🧪 Testing PawPal+
@@ -72,14 +73,55 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+The `Scheduler` class in [`pawpal_system.py`](pawpal_system.py) is the "brain" of PawPal+. It
+is constructed with an `Owner` and reaches across every pet's tasks to sort, filter, detect
+conflicts, and manage recurring care.
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_by_time()`, `Scheduler.build_schedule()` | Orders tasks by time of day, earliest first. |
+| Filtering | `Scheduler.filter_tasks()`, `Scheduler.all_tasks()`, `Scheduler.tasks_by_frequency()` | Filter by pet, completion status, pending-only, or frequency. |
+| Conflict detection | `Scheduler.find_conflicts()` | Flags tasks sharing the same start time. |
+| Recurring tasks | `Task.next_occurrence()`, `Scheduler.complete_task()`, `Scheduler.reset_daily()` | Auto-reschedules daily/weekly tasks. |
+
+### Sorting behavior
+
+- **`Scheduler.sort_by_time(tasks)`** returns a list of tasks ordered by time of day, earliest
+  first. It sorts on the `"HH:MM"` string, which compares correctly as long as times are
+  zero-padded 24-hour values (e.g. `"08:00"` before `"18:00"`).
+- **`Scheduler.build_schedule(pending_only=True)`** produces the actual daily agenda: it gathers
+  every `(pet, task)` pair (pending only by default) and returns them sorted by time, so the owner
+  sees their day in chronological order. `explain()` renders this schedule as human-readable text.
+
+### Filtering behavior
+
+- **`Scheduler.filter_tasks(pet_name=None, completed=None)`** returns `(pet, task)` pairs filtered
+  by pet name (case-insensitive) and/or completion status. Both filters are optional and combine
+  with AND; calling it with no arguments returns every task across all pets.
+- **`Scheduler.all_tasks(pending_only=False)`** retrieves every `(pet, task)` pair, optionally
+  limited to tasks that are not yet completed.
+- **`Scheduler.tasks_by_frequency(frequency)`** returns all tasks matching a given frequency
+  (e.g. `"daily"`, `"weekly"`).
+
+### Conflict detection logic
+
+- **`Scheduler.find_conflicts(pending_only=False)`** groups every `(pet, task)` pair by its
+  `time` and returns only the slots that hold two or more tasks — the clashes an owner needs to
+  resolve. It reports conflicts both across pets (walking two dogs at 08:00) and within a single
+  pet (feeding and medicating the same cat at 07:30), sorted earliest-first. Detection is by
+  **exact start time**; it does not model task duration, so overlapping-but-not-identical times
+  are not flagged.
+
+### Recurring task logic
+
+- **`Task.next_occurrence(from_date=None)`** returns a fresh, uncompleted copy of the task with its
+  `due_date` advanced by the interval for its frequency (one day for `"daily"`, seven for
+  `"weekly"`). It returns `None` for frequencies that do not recur on a fixed interval, so the
+  caller can tell there is nothing to reschedule.
+- **`Scheduler.complete_task(task)`** marks a task complete and, if it recurs, appends its next
+  occurrence to the same pet's task list — so finishing today's walk automatically queues
+  tomorrow's.
+- **`Scheduler.reset_daily()`** marks every `"daily"` task incomplete to begin a new day's cycle.
 
 ## 📸 Demo Walkthrough
 

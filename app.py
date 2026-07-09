@@ -1,5 +1,7 @@
 import streamlit as st
 
+from pawpal_system import Task, Pet, Owner, Scheduler
+
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
 st.title("🐾 PawPal+")
@@ -38,51 +40,133 @@ At minimum, your system should:
 
 st.divider()
 
-st.subheader("Quick Demo Inputs (UI only)")
+# Create the Owner + Scheduler once and reuse them across Streamlit reruns.
 owner_name = st.text_input("Owner name", value="Jordan")
-pet_name = st.text_input("Pet name", value="Mochi")
-species = st.selectbox("Species", ["dog", "cat", "other"])
+if "owner" not in st.session_state:
+    st.session_state.owner = Owner(owner_name)
+    st.session_state.scheduler = Scheduler(st.session_state.owner)
 
-st.markdown("### Tasks")
-st.caption("Add a few tasks. In your final version, these should feed into your scheduler.")
+owner: Owner = st.session_state.owner
+scheduler: Scheduler = st.session_state.scheduler
 
-if "tasks" not in st.session_state:
-    st.session_state.tasks = []
+st.subheader("Add a Pet")
+col_a, col_b = st.columns(2)
+with col_a:
+    pet_name = st.text_input("Pet name", value="Mochi")
+with col_b:
+    species = st.selectbox("Species", ["dog", "cat", "other"])
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    task_title = st.text_input("Task title", value="Morning walk")
-with col2:
-    duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=20)
-with col3:
-    priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
+if st.button("Add pet"):
+    if owner.get_pet(pet_name) is not None:
+        st.warning(f"{pet_name} is already registered.")
+    else:
+        owner.add_pet(Pet(pet_name, species))
+        st.success(f"Added {pet_name} ({species}).")
 
-if st.button("Add task"):
-    st.session_state.tasks.append(
-        {"title": task_title, "duration_minutes": int(duration), "priority": priority}
-    )
-
-if st.session_state.tasks:
-    st.write("Current tasks:")
-    st.table(st.session_state.tasks)
+pets = owner.list_pets()
+if pets:
+    st.write("Current pets:")
+    for pet in pets:
+        st.markdown(f"- {pet}")
 else:
-    st.info("No tasks yet. Add one above.")
+    st.info("No pets yet. Add one above.")
+
+st.divider()
+
+st.subheader("Add a Task")
+if not pets:
+    st.info("Add a pet first, then you can assign tasks to it.")
+else:
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        target_pet = st.selectbox("Pet", [pet.name for pet in pets])
+    with col2:
+        task_description = st.text_input("Description", value="Morning walk")
+    with col3:
+        task_time = st.text_input("Time (HH:MM)", value="08:00")
+
+    frequency = st.selectbox("Frequency", ["daily", "weekly", "monthly"])
+
+    if st.button("Add task"):
+        pet = owner.get_pet(target_pet)
+        pet.add_task(Task(task_description, task_time, frequency))
+        st.success(f"Added '{task_description}' at {task_time} for {pet.name}.")
 
 st.divider()
 
 st.subheader("Build Schedule")
-st.caption("This button should call your scheduling logic once you implement it.")
+st.caption("Orders every pending task across all pets by time of day.")
 
 if st.button("Generate schedule"):
-    st.warning(
-        "Not implemented yet. Next step: create your scheduling logic (classes/functions) and call it here."
-    )
-    st.markdown(
-        """
-Suggested approach:
-1. Design your UML (draft).
-2. Create class stubs (no logic).
-3. Implement scheduling behavior.
-4. Connect your scheduler here and display results.
-"""
-    )
+    schedule = scheduler.build_schedule(pending_only=True)
+    if not schedule:
+        st.info("No pending tasks to schedule.")
+    else:
+        st.text(scheduler.explain())
+
+st.divider()
+
+st.subheader("Today's Tasks")
+st.caption("Mark a task done — recurring tasks auto-schedule their next occurrence.")
+
+# Show (and clear) any confirmation left over from the previous rerun.
+if flash := st.session_state.pop("task_flash", None):
+    st.success(flash)
+
+# Warn about pending tasks that collide at the same time of day.
+conflicts = scheduler.find_conflicts(pending_only=True)
+if conflicts:
+    slots = ", ".join(time for time, _ in conflicts)
+    st.warning(f"⚠️ Scheduling conflict at {slots} — tasks overlap.")
+    for time, pairs in conflicts:
+        names = ", ".join(f"{pet.name}: {task.description}" for pet, task in pairs)
+        st.markdown(f"- **{time}** — {names}")
+
+pending = scheduler.filter_tasks(completed=False)
+if not pending:
+    st.info("No pending tasks. All caught up! 🎉")
+else:
+    pending.sort(key=lambda pair: pair[1].time)
+    for pet, task in pending:
+        task_col, btn_col = st.columns([4, 1])
+        with task_col:
+            st.markdown(f"{task.time}  **{pet.name}**: {task.description} ({task.frequency})")
+        with btn_col:
+            # Key must be unique and stable per task across reruns.
+            if st.button("Done", key=f"done-{pet.name}-{id(task)}"):
+                following = scheduler.complete_task(task)
+                if following is not None:
+                    st.session_state.task_flash = (
+                        f"Completed! Next '{task.description}' scheduled for "
+                        f"{following.due_date}."
+                    )
+                else:
+                    st.session_state.task_flash = f"Completed '{task.description}'."
+                st.rerun()
+
+st.divider()
+
+st.subheader("Filter Tasks")
+st.caption("Browse tasks by pet and/or completion status.")
+
+if not pets:
+    st.info("Add a pet and some tasks first.")
+else:
+    fcol1, fcol2 = st.columns(2)
+    with fcol1:
+        pet_choice = st.selectbox("Pet", ["All pets"] + [pet.name for pet in pets])
+    with fcol2:
+        status_choice = st.selectbox("Status", ["All", "Pending", "Done"])
+
+    pet_filter = None if pet_choice == "All pets" else pet_choice
+    completed_filter = {"All": None, "Pending": False, "Done": True}[status_choice]
+
+    results = scheduler.filter_tasks(pet_name=pet_filter, completed=completed_filter)
+    if not results:
+        st.info("No tasks match those filters.")
+    else:
+        # Order the matches chronologically before displaying them.
+        results.sort(key=lambda pair: pair[1].time)
+        st.write(f"{len(results)} task(s):")
+        for pet, task in results:
+            st.markdown(f"- {task.time}  **{pet.name}**: {task}")
