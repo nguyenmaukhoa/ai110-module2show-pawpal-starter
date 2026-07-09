@@ -61,6 +61,7 @@ Today's Schedule
 # Run the full test suite:
 pytest
 
+
 # Run with coverage:
 pytest --cov
 ```
@@ -69,6 +70,15 @@ Sample test output:
 
 ```
 # Paste your pytest output here
+============================ test session starts =============================
+platform darwin -- Python 3.13.14, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/khoanguyen/Documents/AI Engineer/Codepath/Week 3/ai110-module2show-pawpal-starter
+plugins: anyio-4.14.1
+collected 14 items                                                           
+
+test/test_pawpal.py ..............                                     [100%]
+
+============================= 14 passed in 0.01s =============================
 ```
 
 ## 📐 Smarter Scheduling
